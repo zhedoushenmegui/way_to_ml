@@ -18,34 +18,58 @@ def mae(target, pred):
     return np.mean([abs(p-t) for p, t in zip(pred, target)])
 
 
-def car_price_evaluate(d_test, pred):
-    new_d_test = d_test.copy()
-    new_d_test['pred'] = pred
+def car_price_evaluate(target, pred, silent=0):
+    if isinstance(target, pd.DataFrame):
+        new_d_test = target.copy()
+        new_d_test['pred'] = pred
+    else:
+        new_d_test = pd.DataFrame({'price': target, 'pred':pred})
+
     new_d_test['err'] = new_d_test.apply(lambda row: row.price - row.pred, axis=1)
     new_d_test['abserr'] = new_d_test.err.map(lambda x: abs(x))
     new_d_test['ape'] = new_d_test.apply(lambda row: row.abserr / row.price, axis=1)
     mape = np.mean(new_d_test.ape)
-    print(f'MAPE: {round(mape * 100, 2)}%')
     accuracy5p = len(list(filter(lambda x: x <= 0.05, new_d_test.ape))) / len(new_d_test)
-    print(f'5%: {round(accuracy5p, 4) * 100}%')
     msev = float(np.mean(new_d_test.err * new_d_test.err))
-    print(f'mse: {round(msev, 4)}')
     rmse = np.sqrt(msev)
-    print(f'rmse: {round(rmse, 4)}')
+    if not silent:
+        print(f'rmse: {round(rmse, 4)}')
+        print(f'mse: {round(msev, 4)}')
+        print(f'MAPE: {round(mape * 100, 2)}%')
+        print(f'5%: {round(accuracy5p, 4) * 100}%')
+    return {
+        'rmse': round(rmse, 4),
+        'mse': round(msev, 4),
+        'mape': round(mape*100, 4),
+        '5%': round(accuracy5p, 4) * 100
+    }
 
 
-def classifier_evaluate(target, pred):
-    df = pd.DataFrame({'target': target, 'pred': pred})
-    recall = len(df[(df.target == 1) & (df.pred == 1)]) / len(df[df.target == 1])
-    precision = len(df[(df.target == 1) & (df.pred == 1)]) / len(df[df.pred == 1])
+def classifier_evaluate(target, pred, labels=None):
+    """
+    二分类模型评估
+    :param labels:
+    :param target:
+    :param pred:
+    :return:
+    """
+    if labels is None:
+        positive, negative = 1, 0
+    else:
+        positive, negative = labels[0], labels[1]
+    df = pd.DataFrame({'target': list(target), 'pred': list(pred)})
+    recall = len(df[(df.target == positive) & (df.pred == positive)]) / len(df[df.target == positive])
+    precision = len(df[(df.target == positive) & (df.pred == positive)]) / len(df[df.pred == positive])
     accuracy = len(df[df.target == df.pred]) / len(df)
+    f1score = 2 * recall * accuracy / (recall + accuracy)
     ret = {
         'recall': recall,
         'precision': precision,
         'accuracy': accuracy,
-        'tp': len(df[(df.target == 1) & (df.pred == 1)]),
-        'fp': len(df[(df.target == 0) & (df.pred == 1)]),
-        'tn': len(df[(df.target == 0) & (df.pred == 0)]),
-        'fn': len(df[(df.target == 1) & (df.pred == 0)])
+        'f1': f1score,
+        'tp': len(df[(df.target == positive) & (df.pred == positive)]),
+        'fp': len(df[(df.target == negative) & (df.pred == positive)]),
+        'tn': len(df[(df.target == negative) & (df.pred == negative)]),
+        'fn': len(df[(df.target == positive) & (df.pred == negative)])
     }
     return ret
